@@ -53,58 +53,58 @@ Planning a group trip is painful. The "organizer friend" spends 10-20 hours rese
 
 ## Architecture
 
-```mermaid
-graph TB
-    subgraph Client["Client Layer"]
-        Web["Next.js 15 App<br/>(App Router + React 19)"]
-        Mobile["React Native<br/>(Expo SDK 55)"]
-    end
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Client Layer                                │
+│  ┌──────────────────────┐          ┌──────────────────────┐        │
+│  │   Next.js 15 App     │          │   React Native App   │        │
+│  │   (App Router)       │          │   (Expo SDK 55)      │        │
+│  └──────────┬───────────┘          └──────────┬───────────┘        │
+└─────────────┼──────────────────────────────────┼────────────────────┘
+              │                                  │
+              ▼                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Authentication                                │
+│  ┌──────────────────────┐          ┌──────────────────────┐        │
+│  │   Google OAuth       │          │   UUID Token in URL  │        │
+│  │   (creators)         │          │   (participants)     │        │
+│  └──────────────────────┘          └──────────────────────┘        │
+└─────────────────────────────────────────────────────────────────────┘
+              │                                  │
+              ▼                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Supabase Backend                              │
+│                                                                     │
+│  ┌─────────────┐    ┌─────────────┐    ┌──────────────────┐        │
+│  │  PostgreSQL  │    │  Realtime   │    │  Edge Functions  │        │
+│  │  + RLS       │    │  (WebSocket │    │  (Deno runtime)  │        │
+│  │             │◀───│  per trip)  │    │        │         │        │
+│  └──────┬──────┘    └─────────────┘    └────────┼─────────┘        │
+│         │              ▲    ▲                    │                   │
+│         │  status      │    │ vote               │                   │
+│         │  updates     │    │ sync               │                   │
+│         ▼              │    │                    ▼                   │
+│    webhook trigger ────┼────┼──────────▶  ┌───────────┐            │
+│                        │    │             │ Tavily    │            │
+│                        │    │             │ (search)  │            │
+│                        │    │             ├───────────┤            │
+│                        │    │             │ Claude    │            │
+│                        │    │             │ Haiku 4.5 │            │
+│                        │    │             │ (generate)│            │
+│                        │    │             └───────────┘            │
+└────────────────────────┼────┼──────────────────────────────────────┘
+                         │    │
+              ┌──────────┘    └──────────┐
+              │                          │
+        to clients                 to clients
 
-    subgraph Auth["Authentication"]
-        OAuth["Google OAuth<br/>(Creators)"]
-        Token["UUID Token in URL<br/>(Participants — no signup)"]
-    end
-
-    subgraph Backend["Supabase Backend"]
-        DB[("PostgreSQL<br/>+ Row-Level Security")]
-        RT["Realtime<br/>(WebSocket channels<br/>scoped per trip)"]
-        Edge["Edge Functions<br/>(Deno runtime)"]
-    end
-
-    subgraph AI["AI Pipeline"]
-        Tavily["Tavily<br/>Live Web Search"]
-        Claude["Claude Haiku 4.5<br/>Structured Generation"]
-    end
-
-    subgraph Payments["Payments"]
-        Stripe["Stripe<br/>Embedded Checkout"]
-    end
-
-    Web --> OAuth
-    Web --> Token
-    Mobile --> OAuth
-    Mobile --> Token
-
-    Web --> DB
-    Web --> RT
-    Mobile --> DB
-    Mobile --> RT
-
-    Edge --> Tavily
-    Edge --> Claude
-    Edge --> DB
-
-    DB -- "webhook trigger" --> Edge
-    RT -- "status updates" --> Web
-    RT -- "vote sync" --> Web
-    RT -- "vote sync" --> Mobile
-
-    Stripe -- "webhook" --> Web
-
-    style AI fill:#f0f4ff,stroke:#4a6cf7
-    style Backend fill:#f0fff4,stroke:#38a169
-    style Client fill:#fffbeb,stroke:#d69e2e
-    style Payments fill:#fff5f5,stroke:#e53e3e
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Payments                                    │
+│  ┌──────────────────────────────────────────┐                      │
+│  │   Stripe Embedded Checkout               │                      │
+│  │   webhook ──▶ Next.js API route          │                      │
+│  └──────────────────────────────────────────┘                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Why This Architecture?
@@ -123,36 +123,42 @@ graph TB
 
 The suggestion engine is the core differentiator. No competitor combines live web search + structured AI generation + group voting + AI assembly.
 
-```mermaid
-sequenceDiagram
-    participant Creator
-    participant App as Next.js App
-    participant DB as Supabase DB
-    participant Edge as Edge Function
-    participant Search as Tavily API
-    participant LLM as Claude Haiku 4.5
-
-    Creator->>App: Create trip (destination, dates, preferences)
-    App->>DB: INSERT trip (status: pending)
-    DB-->>Edge: Webhook trigger
-
-    activate Edge
-    Note over Edge: For each activity category...
-
-    Edge->>Search: Search "{destination} {category} activities"
-    Search-->>Edge: Top results with snippets
-
-    Edge->>LLM: Generate suggestions from search context
-    Note over LLM: Structured JSON output<br/>validated with Zod schema
-    LLM-->>Edge: 8-10 suggestions per category
-
-    Edge->>Edge: Cross-category deduplication
-    Edge->>Edge: Scale count by trip duration
-    Edge->>DB: INSERT suggestions + log AI cost
-    deactivate Edge
-
-    DB-->>App: Realtime: status → ready
-    App-->>Creator: 30+ suggestions appear
+```
+  Creator            Next.js App         Supabase DB        Edge Function       Tavily API       Claude Haiku 4.5
+    │                    │                    │                    │                  │                   │
+    │  Create trip       │                    │                    │                  │                   │
+    │  (destination,     │                    │                    │                  │                   │
+    │   dates, prefs)    │                    │                    │                  │                   │
+    │───────────────────▶│                    │                    │                  │                   │
+    │                    │  INSERT trip       │                    │                  │                   │
+    │                    │  (status: pending) │                    │                  │                   │
+    │                    │───────────────────▶│                    │                  │                   │
+    │                    │                    │                    │                  │                   │
+    │                    │                    │  webhook trigger   │                  │                   │
+    │                    │                    │───────────────────▶│                  │                   │
+    │                    │                    │                    │                  │                   │
+    │                    │                    │                    │  For each category:                  │
+    │                    │                    │                    │──────────────────▶│                   │
+    │                    │                    │                    │  search results   │                   │
+    │                    │                    │                    │◀─────────────────│                   │
+    │                    │                    │                    │                  │                   │
+    │                    │                    │                    │  Generate from search context        │
+    │                    │                    │                    │─────────────────────────────────────▶│
+    │                    │                    │                    │  8-10 structured suggestions         │
+    │                    │                    │                    │◀────────────────────────────────────│
+    │                    │                    │                    │                  │                   │
+    │                    │                    │                    │  Deduplicate across categories       │
+    │                    │                    │                    │  Scale count by trip duration        │
+    │                    │                    │                    │                  │                   │
+    │                    │                    │  INSERT suggestions│                  │                   │
+    │                    │                    │  + log AI cost     │                  │                   │
+    │                    │                    │◀──────────────────│                  │                   │
+    │                    │                    │                    │                  │                   │
+    │                    │  Realtime:         │                    │                  │                   │
+    │                    │  status → ready    │                    │                  │                   │
+    │                    │◀──────────────────│                    │                  │                   │
+    │  30+ suggestions   │                    │                    │                  │                   │
+    │◀──────────────────│                    │                    │                  │                   │
 ```
 
 ### Cost Control
@@ -172,34 +178,41 @@ Every generation logs its cost to the database. At ~$0.01-0.02 per trip (Claude 
 
 The social core of the product. Designed to maximize participation rate — the single highest-risk behavioral metric.
 
-```mermaid
-graph LR
-    subgraph Creator
-        A["Generate<br/>sharing link"] --> B["Share via<br/>WhatsApp/iMessage"]
-    end
+```
+  Creator                                      Participant (no signup)
+  ───────                                      ──────────────────────
 
-    subgraph Participant["Participant (no signup)"]
-        C["Open link"] --> D["Enter<br/>display name"]
-        D --> E["Vote on<br/>each activity"]
-    end
-
-    subgraph Voting["Vote Options"]
-        F["Include"]
-        G["Maybe"]
-        H["Skip"]
-    end
-
-    subgraph Realtime["Real-time Sync"]
-        I["All participants<br/>see votes instantly"]
-        J["Progress:<br/>'4 of 8 friends voted'"]
-    end
-
-    B --> C
-    E --> F & G & H
-    F & G & H --> I & J
-
-    style Voting fill:#f0f4ff,stroke:#4a6cf7
-    style Realtime fill:#f0fff4,stroke:#38a169
+  ┌─────────────────┐    WhatsApp / iMessage    ┌─────────────────┐
+  │ Generate        │─────────────────────────▶│ Open link       │
+  │ sharing link    │        share link         │ (zero auth)     │
+  └─────────────────┘                           └────────┬────────┘
+                                                         │
+                                                         ▼
+                                                ┌─────────────────┐
+                                                │ Enter display   │
+                                                │ name            │
+                                                └────────┬────────┘
+                                                         │
+                                                         ▼
+                                          ┌──────────────────────────┐
+                                          │   Vote on each activity  │
+                                          │                          │
+                                          │  ┌────────┐ ┌─────┐ ┌──────┐
+                                          │  │Include │ │Maybe│ │ Skip │
+                                          │  └────────┘ └─────┘ └──────┘
+                                          └──────────────┬───────────┘
+                                                         │
+                              ┌───────────────────────────┘
+                              │
+                              ▼
+               ┌──────────────────────────────┐
+               │      Real-time Sync          │
+               │                              │
+               │  All participants see        │
+               │  votes instantly             │
+               │                              │
+               │  "4 of 8 friends voted"      │
+               └──────────────────────────────┘
 ```
 
 **Design principles for engagement:**
@@ -252,20 +265,13 @@ tripcraft/
 
 Built in 6 phases following strict architecture dependencies:
 
-```mermaid
-graph LR
-    P1["Phase 1<br/>Foundation<br/>✅ Complete"] --> P2["Phase 2<br/>AI Pipeline<br/>✅ Complete"]
-    P2 --> P3["Phase 3<br/>Voting System<br/>🔄 Next"]
-    P3 --> P4["Phase 4<br/>Payment +<br/>Itinerary"]
-    P4 --> P5["Phase 5<br/>SaaS Polish"]
-    P5 --> P6["Phase 6<br/>Mobile App"]
-
-    style P1 fill:#c6f6d5,stroke:#38a169
-    style P2 fill:#c6f6d5,stroke:#38a169
-    style P3 fill:#fefcbf,stroke:#d69e2e
-    style P4 fill:#f7f7f7,stroke:#a0aec0
-    style P5 fill:#f7f7f7,stroke:#a0aec0
-    style P6 fill:#f7f7f7,stroke:#a0aec0
+```
+  Phase 1          Phase 2          Phase 3          Phase 4          Phase 5          Phase 6
+┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐
+│Foundation │───▶│AI Pipeline│───▶│  Voting   │───▶│ Payment + │───▶│   SaaS    │───▶│  Mobile   │
+│           │    │           │    │  System   │    │ Itinerary │    │  Polish   │    │   App     │
+│  done     │    │  done     │    │  next     │    │           │    │           │    │           │
+└───────────┘    └───────────┘    └───────────┘    └───────────┘    └───────────┘    └───────────┘
 ```
 
 Each phase gates the next — AI pipeline must be validated before building voting UI, voting must work before wiring payments, web must be complete before mobile.
