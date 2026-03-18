@@ -17,27 +17,25 @@ Planning a group trip is painful. The "organizer friend" spends 10-20 hours rese
 ## How It Works
 
 ```
- Creator                    AI Pipeline                    Group
-┌─────────┐              ┌──────────────┐              ┌─────────┐
-│ Sign up │              │              │              │         │
-│ (Google │──── Create ──▶│  Web Search  │              │  Open   │
-│  OAuth) │    Trip +     │  (Tavily)    │              │ voting  │
-│         │  preferences  │      │       │              │  link   │
-└─────────┘               │      ▼       │              │ (no     │
-                          │  Claude AI   │── Share ────▶│ signup) │
-                          │  generates   │   link       │         │
-                          │  30+ ideas   │              │  Vote   │
-                          │              │              │ include │
-                          └──────┬───────┘              │  maybe  │
-                                 │                      │  skip   │
-                                 │                      └────┬────┘
-                                 │                           │
-                                 ▼                           │
-                          ┌──────────────┐                   │
-                          │  AI assembles│◀── top votes ─────┘
-                          │  day-by-day  │
-                          │  itinerary   │
-                          └──────────────┘
+    Creator                   AI Pipeline                     Group
+  ┌──────────┐            ┌────────────────┐            ┌──────────────┐
+  │ Sign up  │            │                │            │              │
+  │ (Google  │── Create ──▶  Web Search    │            │  Open voting │
+  │  OAuth)  │   Trip +   │  (Tavily)      │            │  link (no    │
+  │          │   prefs    │      │         │            │  signup)     │
+  └──────────┘            │      ▼         │            │              │
+                          │  Claude AI     │── Share ──▶│  Vote:       │
+                          │  generates     │   link     │  include /   │
+                          │  30+ ideas     │            │  maybe /     │
+                          │                │            │  skip        │
+                          └───────┬────────┘            └──────┬───────┘
+                                  │                            │
+                                  ▼                            │
+                          ┌────────────────┐                   │
+                          │ AI assembles   │◀── top votes ─────┘
+                          │ day-by-day     │
+                          │ itinerary      │
+                          └────────────────┘
 ```
 
 ### Step by Step
@@ -54,57 +52,59 @@ Planning a group trip is painful. The "organizer friend" spends 10-20 hours rese
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Client Layer                                │
-│  ┌──────────────────────┐          ┌──────────────────────┐        │
-│  │   Next.js 15 App     │          │   React Native App   │        │
-│  │   (App Router)       │          │   (Expo SDK 55)      │        │
-│  └──────────┬───────────┘          └──────────┬───────────┘        │
-└─────────────┼──────────────────────────────────┼────────────────────┘
-              │                                  │
-              ▼                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       Authentication                                │
-│  ┌──────────────────────┐          ┌──────────────────────┐        │
-│  │   Google OAuth       │          │   UUID Token in URL  │        │
-│  │   (creators)         │          │   (participants)     │        │
-│  └──────────────────────┘          └──────────────────────┘        │
-└─────────────────────────────────────────────────────────────────────┘
-              │                                  │
-              ▼                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       Supabase Backend                              │
-│                                                                     │
-│  ┌─────────────┐    ┌─────────────┐    ┌──────────────────┐        │
-│  │  PostgreSQL  │    │  Realtime   │    │  Edge Functions  │        │
-│  │  + RLS       │    │  (WebSocket │    │  (Deno runtime)  │        │
-│  │             │◀───│  per trip)  │    │        │         │        │
-│  └──────┬──────┘    └─────────────┘    └────────┼─────────┘        │
-│         │              ▲    ▲                    │                   │
-│         │  status      │    │ vote               │                   │
-│         │  updates     │    │ sync               │                   │
-│         ▼              │    │                    ▼                   │
-│    webhook trigger ────┼────┼──────────▶  ┌───────────┐            │
-│                        │    │             │ Tavily    │            │
-│                        │    │             │ (search)  │            │
-│                        │    │             ├───────────┤            │
-│                        │    │             │ Claude    │            │
-│                        │    │             │ Haiku 4.5 │            │
-│                        │    │             │ (generate)│            │
-│                        │    │             └───────────┘            │
-└────────────────────────┼────┼──────────────────────────────────────┘
-                         │    │
-              ┌──────────┘    └──────────┐
-              │                          │
-        to clients                 to clients
+┌──────────────────────────────────────────────────────────────┐
+│  Client Layer                                                │
+│                                                              │
+│  ┌────────────────────┐          ┌────────────────────┐      │
+│  │  Next.js 15 App    │          │  React Native App  │      │
+│  │  (App Router)      │          │  (Expo SDK 55)     │      │
+│  └─────────┬──────────┘          └─────────┬──────────┘      │
+└────────────┼───────────────────────────────┼─────────────────┘
+             │                               │
+             ▼                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Authentication                                              │
+│                                                              │
+│  ┌────────────────────┐          ┌────────────────────┐      │
+│  │  Google OAuth      │          │  UUID Token in URL │      │
+│  │  (creators)        │          │  (participants)    │      │
+│  └────────────────────┘          └────────────────────┘      │
+└──────────────────────────────────────────────────────────────┘
+             │                               │
+             ▼                               ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Supabase Backend                                            │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │
+│  │  PostgreSQL  │  │  Realtime    │  │  Edge Functions   │  │
+│  │  + RLS       │  │  (WebSocket  │  │  (Deno runtime)   │  │
+│  │              │  │   per trip)  │  │         │         │  │
+│  └──────┬───────┘  └──────┬───────┘  └─────────┼─────────┘  │
+│         │                 │                     │            │
+│         │  webhook        │  status updates     │            │
+│         │  trigger        │  + vote sync        │            │
+│         │─────────────────┼────────────────────▶│            │
+│         │                 │                     │            │
+│         │                 │               ┌─────┴─────┐     │
+│         │                 │               │  Tavily   │     │
+│         │                 │               │  (search) │     │
+│         │                 │               ├───────────┤     │
+│         │                 │               │  Claude   │     │
+│         │                 │               │  Haiku    │     │
+│         │                 │               └───────────┘     │
+└─────────┼─────────────────┼─────────────────────────────────┘
+          │                 │
+          ▼                 ▼
+      to clients        to clients
 
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Payments                                    │
-│  ┌──────────────────────────────────────────┐                      │
-│  │   Stripe Embedded Checkout               │                      │
-│  │   webhook ──▶ Next.js API route          │                      │
-│  └──────────────────────────────────────────┘                      │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Payments                                                    │
+│                                                              │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │  Stripe Embedded Checkout                          │      │
+│  │  webhook ──▶ Next.js API route                     │      │
+│  └────────────────────────────────────────────────────┘      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### Why This Architecture?
@@ -124,41 +124,45 @@ Planning a group trip is painful. The "organizer friend" spends 10-20 hours rese
 The suggestion engine is the core differentiator. No competitor combines live web search + structured AI generation + group voting + AI assembly.
 
 ```
-  Creator            Next.js App         Supabase DB        Edge Function       Tavily API       Claude Haiku 4.5
-    │                    │                    │                    │                  │                   │
-    │  Create trip       │                    │                    │                  │                   │
-    │  (destination,     │                    │                    │                  │                   │
-    │   dates, prefs)    │                    │                    │                  │                   │
-    │───────────────────▶│                    │                    │                  │                   │
-    │                    │  INSERT trip       │                    │                  │                   │
-    │                    │  (status: pending) │                    │                  │                   │
-    │                    │───────────────────▶│                    │                  │                   │
-    │                    │                    │                    │                  │                   │
-    │                    │                    │  webhook trigger   │                  │                   │
-    │                    │                    │───────────────────▶│                  │                   │
-    │                    │                    │                    │                  │                   │
-    │                    │                    │                    │  For each category:                  │
-    │                    │                    │                    │──────────────────▶│                   │
-    │                    │                    │                    │  search results   │                   │
-    │                    │                    │                    │◀─────────────────│                   │
-    │                    │                    │                    │                  │                   │
-    │                    │                    │                    │  Generate from search context        │
-    │                    │                    │                    │─────────────────────────────────────▶│
-    │                    │                    │                    │  8-10 structured suggestions         │
-    │                    │                    │                    │◀────────────────────────────────────│
-    │                    │                    │                    │                  │                   │
-    │                    │                    │                    │  Deduplicate across categories       │
-    │                    │                    │                    │  Scale count by trip duration        │
-    │                    │                    │                    │                  │                   │
-    │                    │                    │  INSERT suggestions│                  │                   │
-    │                    │                    │  + log AI cost     │                  │                   │
-    │                    │                    │◀──────────────────│                  │                   │
-    │                    │                    │                    │                  │                   │
-    │                    │  Realtime:         │                    │                  │                   │
-    │                    │  status → ready    │                    │                  │                   │
-    │                    │◀──────────────────│                    │                  │                   │
-    │  30+ suggestions   │                    │                    │                  │                   │
-    │◀──────────────────│                    │                    │                  │                   │
+  Creator        Next.js         Supabase DB     Edge Function     Tavily          Claude Haiku
+     │               │               │               │               │               │
+     │  Create trip  │               │               │               │               │
+     │  (dest/dates/ │               │               │               │               │
+     │   prefs)      │               │               │               │               │
+     │──────────────▶│               │               │               │               │
+     │               │  INSERT trip  │               │               │               │
+     │               │  (pending)    │               │               │               │
+     │               │──────────────▶│               │               │               │
+     │               │               │               │               │               │
+     │               │               │  webhook      │               │               │
+     │               │               │  trigger      │               │               │
+     │               │               │──────────────▶│               │               │
+     │               │               │               │               │               │
+     │               │               │               │  For each activity category:  │
+     │               │               │               │──────────────▶│               │
+     │               │               │               │  results      │               │
+     │               │               │               │◀─────────────│               │
+     │               │               │               │               │               │
+     │               │               │               │  Generate from search context │
+     │               │               │               │──────────────────────────────▶│
+     │               │               │               │  8-10 structured suggestions  │
+     │               │               │               │◀─────────────────────────────│
+     │               │               │               │               │               │
+     │               │               │               │  Deduplicate + scale by      │
+     │               │               │               │  trip duration               │
+     │               │               │               │               │               │
+     │               │               │  INSERT       │               │               │
+     │               │               │  suggestions  │               │               │
+     │               │               │  + log cost   │               │               │
+     │               │               │◀─────────────│               │               │
+     │               │               │               │               │               │
+     │               │  Realtime:    │               │               │               │
+     │               │  status=ready │               │               │               │
+     │               │◀─────────────│               │               │               │
+     │  30+ suggest- │               │               │               │               │
+     │  ions appear  │               │               │               │               │
+     │◀─────────────│               │               │               │               │
+     │               │               │               │               │               │
 ```
 
 ### Cost Control
@@ -179,40 +183,40 @@ Every generation logs its cost to the database. At ~$0.01-0.02 per trip (Claude 
 The social core of the product. Designed to maximize participation rate — the single highest-risk behavioral metric.
 
 ```
-  Creator                                      Participant (no signup)
-  ───────                                      ──────────────────────
+  Creator                                   Participant (no signup)
+  ───────                                   ──────────────────────
 
-  ┌─────────────────┐    WhatsApp / iMessage    ┌─────────────────┐
-  │ Generate        │─────────────────────────▶│ Open link       │
-  │ sharing link    │        share link         │ (zero auth)     │
-  └─────────────────┘                           └────────┬────────┘
-                                                         │
-                                                         ▼
-                                                ┌─────────────────┐
-                                                │ Enter display   │
-                                                │ name            │
-                                                └────────┬────────┘
-                                                         │
-                                                         ▼
-                                          ┌──────────────────────────┐
-                                          │   Vote on each activity  │
-                                          │                          │
-                                          │  ┌────────┐ ┌─────┐ ┌──────┐
-                                          │  │Include │ │Maybe│ │ Skip │
-                                          │  └────────┘ └─────┘ └──────┘
-                                          └──────────────┬───────────┘
-                                                         │
-                              ┌───────────────────────────┘
+  ┌──────────────────┐                      ┌──────────────────┐
+  │ Generate         │   WhatsApp /         │ Open link        │
+  │ sharing link     │──────────────────────▶ (zero auth wall) │
+  └──────────────────┘   iMessage           └────────┬─────────┘
+                                                     │
+                                                     ▼
+                                            ┌──────────────────┐
+                                            │ Enter display    │
+                                            │ name             │
+                                            └────────┬─────────┘
+                                                     │
+                                                     ▼
+                                            ┌──────────────────┐
+                                            │ Vote on each     │
+                                            │ activity:        │
+                                            │                  │
+                                            │ [Include] [Maybe]│
+                                            │ [Skip]           │
+                                            └────────┬─────────┘
+                                                     │
+                              ┌───────────────────────┘
                               │
                               ▼
-               ┌──────────────────────────────┐
-               │      Real-time Sync          │
-               │                              │
-               │  All participants see        │
-               │  votes instantly             │
-               │                              │
-               │  "4 of 8 friends voted"      │
-               └──────────────────────────────┘
+                  ┌──────────────────────────┐
+                  │     Real-time Sync       │
+                  │                          │
+                  │  All participants see    │
+                  │  votes instantly         │
+                  │                          │
+                  │  "4 of 8 friends voted"  │
+                  └──────────────────────────┘
 ```
 
 **Design principles for engagement:**
@@ -266,12 +270,12 @@ tripcraft/
 Built in 6 phases following strict architecture dependencies:
 
 ```
-  Phase 1          Phase 2          Phase 3          Phase 4          Phase 5          Phase 6
-┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐    ┌───────────┐
-│Foundation │───▶│AI Pipeline│───▶│  Voting   │───▶│ Payment + │───▶│   SaaS    │───▶│  Mobile   │
-│           │    │           │    │  System   │    │ Itinerary │    │  Polish   │    │   App     │
-│  done     │    │  done     │    │  next     │    │           │    │           │    │           │
-└───────────┘    └───────────┘    └───────────┘    └───────────┘    └───────────┘    └───────────┘
+  Phase 1         Phase 2         Phase 3         Phase 4         Phase 5         Phase 6
+┌───────────┐   ┌───────────┐   ┌───────────┐   ┌───────────┐   ┌───────────┐   ┌───────────┐
+│Foundation │──▶│AI Pipeline│──▶│  Voting   │──▶│ Payment + │──▶│   SaaS    │──▶│  Mobile   │
+│           │   │           │   │  System   │   │ Itinerary │   │  Polish   │   │   App     │
+│  done     │   │  done     │   │  next     │   │           │   │           │   │           │
+└───────────┘   └───────────┘   └───────────┘   └───────────┘   └───────────┘   └───────────┘
 ```
 
 Each phase gates the next — AI pipeline must be validated before building voting UI, voting must work before wiring payments, web must be complete before mobile.
