@@ -1,4 +1,19 @@
+<div align="center">
+
 # TripCraft
+
+**Plan a trip as a group: AI research, group votes, one itinerary.**
+
+![overview: code private](https://img.shields.io/badge/overview-code%20private-6e7781)
+![Next.js](https://img.shields.io/badge/Next.js-000000?logo=nextdotjs&logoColor=white)
+![Expo](https://img.shields.io/badge/Expo-000020?logo=expo&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+![Claude: Haiku](https://img.shields.io/badge/Claude-Haiku-D97757?logo=claude&logoColor=white)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+[The problem](#the-problem) · [How it works](#how-it-works) · [Design decisions](#design-decisions) · [Stack](#stack)
+
+</div>
 
 AI-assisted group trip planning: the AI researches a destination, the group votes on what to do, and the AI assembles the votes into a day-by-day itinerary.
 
